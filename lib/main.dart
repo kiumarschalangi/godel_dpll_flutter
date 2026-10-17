@@ -32,6 +32,36 @@ class _HomePageState extends State<HomePage> {
   Map<String, DpllResult>? _comparison;
   String? _error;
 
+  final _focus = FocusNode();
+
+  /// Connective buttons: (button label, tooltip, text inserted at the cursor).
+  static const _connectives = <(String, String, String)>[
+    ('¬', 'negation', '¬'),
+    ('∧', 'and', ' ∧ '),
+    ('∨', 'or', ' ∨ '),
+    ('→', 'implication', ' → '),
+  ];
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  /// Inserts [s] at the cursor, replacing the selection if there is one.
+  void _insert(String s) {
+    final text = _ctrl.text;
+    final sel = _ctrl.selection;
+    final start = sel.isValid ? sel.start : text.length;
+    final end = sel.isValid ? sel.end : text.length;
+    _ctrl.value = TextEditingValue(
+      text: text.replaceRange(start, end, s),
+      selection: TextSelection.collapsed(offset: start + s.length),
+    );
+    _focus.requestFocus();
+  }
+
   static const _examples = <String, String>{
     'Prelinearity': '(p -> q) | (q -> p)',
     'Excluded middle': 'p | ~p',
@@ -76,12 +106,30 @@ class _HomePageState extends State<HomePage> {
         children: [
           TextField(
             controller: _ctrl,
+            focusNode: _focus,
+            // Keep the cursor where _insert put it when a connective button returns focus.
+            selectAllOnFocus: false,
             decoration: InputDecoration(
               labelText: 'Formula   (operators: ~  &  |  ->   constants: T  F)',
               border: const OutlineInputBorder(),
               errorText: _error,
             ),
             onSubmitted: (_) => _run(),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              for (final (label, tip, ins) in _connectives)
+                Tooltip(
+                  message: tip,
+                  child: OutlinedButton(
+                    onPressed: () => _insert(ins),
+                    child: Text(label, style: const TextStyle(fontSize: 18)),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 8),
           Wrap(
