@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 
 import 'godel_dpll.dart';
+import 'ui/equal_height_row.dart';
+import 'ui/formula_card.dart';
+import 'ui/search_tree_view.dart';
+import 'ui/strategy_comparison.dart';
+import 'ui/tokens.dart';
+import 'ui/verdict_panel.dart';
 
 void main() => runApp(const GodelDpllApp());
 
@@ -12,7 +18,7 @@ class GodelDpllApp extends StatelessWidget {
     return MaterialApp(
       title: 'Gödel-DPLL',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
+      theme: buildAppTheme(),
       home: const HomePage(),
     );
   }
@@ -29,7 +35,10 @@ class _HomePageState extends State<HomePage> {
   bool _pinning = false;
   bool _refining = false;
   DpllResult? _result;
-  Map<String, DpllResult>? _comparison;
+  List<StrategyRun>? _comparison;
+  // flags of the run shown in the verdict, for the comparison's "This run" highlight
+  bool _ranPinning = false;
+  bool _ranRefining = false;
   String? _error;
 
   final _focus = FocusNode();
@@ -84,231 +93,191 @@ class _HomePageState extends State<HomePage> {
       setState(() => _error = e.message);
       return;
     }
-    final res = godelDpll(phi!, pinningRules: _pinning, refiningRules: _refining);
-    final cmp = {
-      'Var-Trichotomy only': godelDpll(phi),
-      '+ pinning rules': godelDpll(phi, pinningRules: true),
-      '+ pinning + refining': godelDpll(phi, pinningRules: true, refiningRules: true),
-    };
+    final res =
+        godelDpll(phi, pinningRules: _pinning, refiningRules: _refining);
+    final List<StrategyRun> cmp = [
+      (
+        label: 'Var-Trichotomy only',
+        pinning: false,
+        refining: false,
+        result: godelDpll(phi)
+      ),
+      (
+        label: '+ pinning rules',
+        pinning: true,
+        refining: false,
+        result: godelDpll(phi, pinningRules: true)
+      ),
+      (
+        label: '+ pinning + refining',
+        pinning: true,
+        refining: true,
+        result: godelDpll(phi, pinningRules: true, refiningRules: true)
+      ),
+    ];
     setState(() {
       _result = res;
       _comparison = cmp;
+      _ranPinning = _pinning;
+      _ranRefining = _refining;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final res = _result;
     return Scaffold(
-      appBar: AppBar(title: const Text('Gödel-DPLL — validity in propositional Gödel logic')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          TextField(
-            controller: _ctrl,
-            focusNode: _focus,
-            // Keep the cursor where _insert put it when a connective button returns focus.
-            selectAllOnFocus: false,
-            decoration: InputDecoration(
-              labelText: 'Formula   (operators: ~  &  |  ->   constants: T  F)',
-              border: const OutlineInputBorder(),
-              errorText: _error,
-            ),
-            onSubmitted: (_) => _run(),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
+      body: LayoutBuilder(builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final wide = width >= 1000; // two columns
+        final compact = width < 640; // phone: tighter padding, stacked controls
+        final gap = compact ? 16.0 : 28.0;
+
+        final formula = FormulaCard(
+          controller: _ctrl,
+          focusNode: _focus,
+          error: _error,
+          compact: compact,
+          connectives: _connectives,
+          examples: _examples,
+          pinning: _pinning,
+          refining: _refining,
+          onPinning: (v) => setState(() => _pinning = v),
+          onRefining: (v) => setState(() => _refining = v),
+          onInsert: _insert,
+          onExample: (v) => setState(() => _ctrl.text = v),
+          onDecide: _run,
+        );
+        final verdict = VerdictPanel(result: _result, compact: compact);
+        final tree = SearchTreeCard(tree: _result?.tree, compact: compact);
+        final strategies = StrategyComparisonCard(
+          runs: _comparison,
+          ranPinning: _ranPinning,
+          ranRefining: _ranRefining,
+          compact: compact,
+        );
+
+        return SingleChildScrollView(
+          child: Column(
             children: [
-              for (final (label, tip, ins) in _connectives)
-                Tooltip(
-                  message: tip,
-                  child: OutlinedButton(
-                    onPressed: () => _insert(ins),
-                    child: Text(label, style: const TextStyle(fontSize: 18)),
+              _Header(compact: compact),
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1320),
+                  child: Padding(
+                    padding: compact
+                        ? const EdgeInsets.fromLTRB(16, 16, 16, 32)
+                        : const EdgeInsets.fromLTRB(40, 32, 40, 56),
+                    child: wide
+                        ? Column(
+                            spacing: gap,
+                            children: [
+                              EqualHeightRow(
+                                  flex: const [2, 1],
+                                  spacing: gap,
+                                  children: [formula, verdict]),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                spacing: gap,
+                                children: [
+                                  Expanded(flex: 2, child: tree),
+                                  Expanded(child: strategies),
+                                ],
+                              ),
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            spacing: gap,
+                            children: [formula, verdict, tree, strategies],
+                          ),
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              for (final e in _examples.entries)
-                ActionChip(label: Text(e.key), onPressed: () => setState(() => _ctrl.text = e.value)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 16,
-            children: [
-              FilterChip(
-                label: const Text('pinning rules (Conj-Bot, Conj-Min, Disj-Top, Disj-Max)'),
-                selected: _pinning,
-                onSelected: (v) => setState(() => _pinning = v),
               ),
-              FilterChip(
-                label: const Text('refining rules (Conj-NonTop, Impl-Top-Sharp, Impl-Eq-Branch)'),
-                selected: _refining,
-                onSelected: (v) => setState(() => _refining = v),
-              ),
-              FilledButton.icon(onPressed: _run, icon: const Icon(Icons.play_arrow), label: const Text('Decide')),
             ],
           ),
-          const SizedBox(height: 16),
-          if (res != null) ...[
-            _ResultCard(res),
-            const SizedBox(height: 16),
-            if (_comparison != null) _ComparisonTable(_comparison!),
-            const SizedBox(height: 16),
-            Text('Search tree', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            _TreeView(res.tree),
-          ],
-        ],
-      ),
+        );
+      }),
     );
   }
 }
 
-class _ResultCard extends StatelessWidget {
-  final DpllResult res;
-  const _ResultCard(this.res);
+class _Header extends StatelessWidget {
+  final bool compact;
+  const _Header({required this.compact});
 
   @override
   Widget build(BuildContext context) {
-    final s = res.stats;
-    final k = res.sub.vars.length;
-    final c = res.sub.connectiveCount;
-    final hBound = c < (k + 2) * (k + 1) ~/ 2 ? c : (k + 2) * (k + 1) ~/ 2;
-    final cm = res.countermodel;
-    return Card(
-      color: res.valid ? Colors.green.shade50 : Colors.orange.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(res.valid ? 'VALID' : 'NOT-VALID',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-            if (cm != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text('countermodel: ${cm.entries.map((e) => '${e.key} = ${_fmt(e.value)}').join(', ')}'),
-              ),
-            const SizedBox(height: 8),
-            Text('nodes ${s.nodes}  ·  branching steps ${s.branchings}  ·  depth ${s.maxDepth}  '
-                '(bound h = min(c(φ) = $c, pairs = ${(k + 2) * (k + 1) ~/ 2}) = $hBound)  ·  '
-                'propagation firings ${s.ruleFirings}  ·  |Sub(φ)| = ${res.sub.n - 2}, k = $k'),
-          ],
-        ),
+    final muted = AppText.sans(size: 14, color: AppColors.muted);
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-    );
-  }
-}
-
-class _ComparisonTable extends StatelessWidget {
-  final Map<String, DpllResult> cmp;
-  const _ComparisonTable(this.cmp);
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Strategy comparison (Remark 5.20)', style: Theme.of(context).textTheme.titleMedium),
-            DataTable(
-              columns: const [
-                DataColumn(label: Text('strategy')),
-                DataColumn(label: Text('nodes'), numeric: true),
-                DataColumn(label: Text('branchings'), numeric: true),
-                DataColumn(label: Text('depth'), numeric: true),
-                DataColumn(label: Text('firings'), numeric: true),
-              ],
-              rows: [
-                for (final e in cmp.entries)
-                  DataRow(cells: [
-                    DataCell(Text(e.key)),
-                    DataCell(Text('${e.value.stats.nodes}')),
-                    DataCell(Text('${e.value.stats.branchings}')),
-                    DataCell(Text('${e.value.stats.maxDepth}')),
-                    DataCell(Text('${e.value.stats.ruleFirings}')),
-                  ]),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TreeView extends StatelessWidget {
-  final SearchNode node;
-  final int depth;
-  const _TreeView(this.node, {this.depth = 0});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = switch (node.status) {
-      NodeStatus.closed => Colors.red,
-      NodeStatus.open => Colors.green,
-      NodeStatus.active => Colors.grey,
-    };
-    final label = switch (node.status) {
-      NodeStatus.closed => 'closed',
-      NodeStatus.open => 'open',
-      NodeStatus.active => 'unexplored',
-    };
-    return Padding(
-      padding: EdgeInsets.only(left: depth * 20.0, top: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              border: Border(left: BorderSide(color: color, width: 4)),
-              color: color.withOpacity(0.06),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1320),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+                horizontal: compact ? 16 : 40, vertical: 18),
+            child: Row(
+              spacing: 24,
               children: [
-                Row(children: [
-                  Icon(Icons.circle, size: 10, color: color),
-                  const SizedBox(width: 6),
-                  Text('${node.added.join(',  ')}   ', style: const TextStyle(fontFamily: 'monospace')),
-                  Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-                  Text('   (${node.ruleFirings} propagation firings)',
-                      style: const TextStyle(color: Colors.black54, fontSize: 12)),
-                ]),
-                if (node.rule != null)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 16, top: 2),
-                    child: Text('⟶ ${node.rule}', style: const TextStyle(fontStyle: FontStyle.italic)),
+                Expanded(
+                    child: Row(
+                  spacing: 14,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                          color: AppColors.accent,
+                          borderRadius: BorderRadius.circular(12)),
+                      child: Text('⊨',
+                          style: AppText.math(size: 26, color: Colors.white)
+                              .copyWith(height: 1)),
+                    ),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        spacing: 2,
+                        children: [
+                          Text('Gödel-DPLL',
+                              style: AppText.sans(
+                                      size: 20, weight: FontWeight.w700)
+                                  .copyWith(letterSpacing: -0.2)),
+                          Text('Validity checking in propositional Gödel logic',
+                              style: muted),
+                        ],
+                      ),
+                    ),
+                  ],
+                )),
+                if (!compact)
+                  Flexible(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: 10,
+                      children: [
+                        Text('MSc thesis', style: muted),
+                        Container(
+                          width: 4,
+                          height: 4,
+                          decoration: const BoxDecoration(
+                              color: AppColors.faint, shape: BoxShape.circle),
+                        ),
+                        Flexible(
+                          child: Text('Università degli Studi di Milano',
+                              style: muted, textAlign: TextAlign.end),
+                        ),
+                      ],
+                    ),
                   ),
               ],
             ),
           ),
-          for (final ch in node.children) _TreeView(ch, depth: depth + 1),
-        ],
+        ),
       ),
     );
   }
-}
-
-String _fmt(double x) {
-  // exact rational labels for the values produced by extraction
-  for (var d = 1; d <= 12; d++) {
-    for (var num = 0; num <= d; num++) {
-      if ((x - num / d).abs() < 1e-9) return d == 1 ? '$num' : '$num/$d';
-    }
-  }
-  return x.toStringAsFixed(3);
 }
