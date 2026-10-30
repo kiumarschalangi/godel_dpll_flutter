@@ -213,67 +213,72 @@ class _Header extends StatelessWidget {
         color: AppColors.surface,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1320),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-                horizontal: compact ? 16 : 40, vertical: 18),
-            child: Row(
-              spacing: 24,
-              children: [
-                Expanded(
-                    child: Row(
-                  spacing: 14,
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                          color: AppColors.accent,
-                          borderRadius: BorderRadius.circular(12)),
-                      child: Text('⊨',
-                          style: AppText.math(size: 26, color: Colors.white)
-                              .copyWith(height: 1)),
-                    ),
+      // Background runs under the status bar; content stays below it.
+      child: SafeArea(
+        bottom: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1320),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 16 : 40, vertical: 18),
+              child: Row(
+                spacing: 24,
+                children: [
+                  Expanded(
+                      child: Row(
+                    spacing: 14,
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                            color: AppColors.accent,
+                            borderRadius: BorderRadius.circular(12)),
+                        child: Text('⊨',
+                            style: AppText.math(size: 26, color: Colors.white)
+                                .copyWith(height: 1)),
+                      ),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          spacing: 2,
+                          children: [
+                            Text('Gödel-DPLL',
+                                style: AppText.sans(
+                                        size: 20, weight: FontWeight.w700)
+                                    .copyWith(letterSpacing: -0.2)),
+                            Text(
+                                'Validity checking in propositional Gödel logic',
+                                style: muted),
+                          ],
+                        ),
+                      ),
+                    ],
+                  )),
+                  if (!compact)
                     Flexible(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        spacing: 2,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        spacing: 10,
                         children: [
-                          Text('Gödel-DPLL',
-                              style: AppText.sans(
-                                      size: 20, weight: FontWeight.w700)
-                                  .copyWith(letterSpacing: -0.2)),
-                          Text('Validity checking in propositional Gödel logic',
-                              style: muted),
+                          Text('MSc thesis', style: muted),
+                          Container(
+                            width: 4,
+                            height: 4,
+                            decoration: const BoxDecoration(
+                                color: AppColors.faint, shape: BoxShape.circle),
+                          ),
+                          Flexible(
+                            child: Text('Università degli Studi di Milano',
+                                style: muted, textAlign: TextAlign.end),
+                          ),
                         ],
                       ),
                     ),
-                  ],
-                )),
-                if (!compact)
-                  Flexible(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      spacing: 10,
-                      children: [
-                        Text('MSc thesis', style: muted),
-                        Container(
-                          width: 4,
-                          height: 4,
-                          decoration: const BoxDecoration(
-                              color: AppColors.faint, shape: BoxShape.circle),
-                        ),
-                        Flexible(
-                          child: Text('Università degli Studi di Milano',
-                              style: muted, textAlign: TextAlign.end),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
